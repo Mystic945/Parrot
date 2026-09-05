@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
     "icons": "node scripts/generate-icon.mjs && tauri icon icon-source.png",
-    "model": "node scripts/download-model.mjs"
+    "model": "node scripts/download-model.mjs",
+    "site": "node scripts/build-site.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
