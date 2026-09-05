@@ -1,0 +1,39 @@
+[package]
+name = "parrot"
+version = "0.1.0"
+description = "Offline push-to-talk speech to text"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "parrot_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+parking_lot = "0.12"
+# Pinned to 0.15: the 0.16+ line reworked the device/stream API.
+cpal = "0.15"
+hound = "3"
+whisper-rs = "0.16"
+enigo = "0.6"
+arboard = "3"
+
+[profile.dev]
+# whisper.cpp is unusably slow when its dependencies are unoptimized.
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
