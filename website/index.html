@@ -1,0 +1,735 @@
+<title>Parrot Dictation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+
+<style>
+  :root {
+    /* Light: putty page, near-white panels. The page is the darker
+       surface and the panels lift off it, rather than the reverse. */
+    --ground: #e9e5de;
+    --panel: #fbfaf8;
+    --panel-sunk: #e2ded6;
+    --ink: #1c1a17;
+    --ink-soft: #514a41;
+    --muted: #7a7167;
+    --rule: #cec8bd;
+    --rule-strong: #b3aba0;
+    --accent: #c2410c;
+    --accent-ink: #ffffff;
+    --accent-wash: #f7e6dc;
+    --signal: #0f6e62;
+    --signal-wash: #dfeeea;
+
+    --step: clamp(1rem, 0.92rem + 0.4vw, 1.125rem);
+    --measure: 63ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #17150f;
+      --panel: #211e18;
+      --panel-sunk: #100e0a;
+      --ink: #f0ebe1;
+      --ink-soft: #c2b9aa;
+      --muted: #8d8478;
+      --rule: #322d24;
+      --rule-strong: #4a4237;
+      --accent: #f97316;
+      --accent-ink: #17150f;
+      --accent-wash: #2e1d12;
+      --signal: #5cbfae;
+      --signal-wash: #12241f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #17150f;
+    --panel: #211e18;
+    --panel-sunk: #100e0a;
+    --ink: #f0ebe1;
+    --ink-soft: #c2b9aa;
+    --muted: #8d8478;
+    --rule: #322d24;
+    --rule-strong: #4a4237;
+    --accent: #f97316;
+    --accent-ink: #17150f;
+    --accent-wash: #2e1d12;
+    --signal: #5cbfae;
+    --signal-wash: #12241f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Newsreader", Georgia, "Times New Roman", serif;
+    font-size: var(--step);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  /* ---- shared type roles ---- */
+  .label {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.688rem;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .mono {
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1, h2, h3 {
+    font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    margin: 0;
+    line-height: 1.05;
+  }
+
+  h2 { font-size: clamp(1.6rem, 1.2rem + 1.8vw, 2.35rem); }
+  h3 { font-size: 1.075rem; letter-spacing: -0.01em; line-height: 1.25; }
+
+  p { margin: 0; max-width: var(--measure); }
+
+  a { color: var(--accent); }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* ---- masthead ---- */
+  .masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font-family: "Archivo", sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 1.05rem;
+  }
+
+  .glyph {
+    width: 27px;
+    height: 27px;
+    border-radius: 7px;
+    background: linear-gradient(160deg, #d9541a, #a8480f);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+
+  .glyph svg { display: block; }
+
+  /* ---- hero ---- */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+    padding: 68px 0 60px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.9rem, 1.7rem + 5vw, 5.1rem);
+    line-height: 0.94;
+    letter-spacing: -0.045em;
+  }
+
+  .thesis {
+    font-size: clamp(1.15rem, 1.02rem + 0.6vw, 1.4rem);
+    line-height: 1.45;
+    color: var(--ink-soft);
+    margin-top: 22px;
+    max-width: 30ch;
+  }
+
+  .thesis em {
+    font-style: italic;
+    color: var(--ink);
+  }
+
+  .offline-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 26px;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--signal);
+    border-radius: 999px;
+    background: var(--signal-wash);
+    color: var(--signal);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--signal);
+    flex: none;
+  }
+
+  /* ---- download panel ---- */
+  .getit {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--accent);
+    padding: 26px;
+  }
+
+  .cta {
+    display: block;
+    width: 100%;
+    margin: 16px 0 0;
+    padding: 15px 20px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    text-align: center;
+    text-decoration: none;
+    font-family: "Archivo", sans-serif;
+    font-weight: 600;
+    font-size: 1.03rem;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+  }
+
+  .cta:hover { filter: brightness(1.09); }
+
+  .specs {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 7px 18px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.775rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .specs dt { color: var(--muted); }
+  .specs dd { margin: 0; color: var(--ink-soft); }
+
+  /* ---- section frame ---- */
+  section { padding: 62px 0; border-top: 1px solid var(--rule); }
+
+  .sec-head { margin-bottom: 34px; }
+  .sec-head h2 { margin-top: 9px; }
+  .sec-head p { margin-top: 14px; color: var(--ink-soft); }
+
+  /* ---- signal path ---- */
+  .path {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .stage {
+    background: var(--panel);
+    padding: 20px 18px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .stage-n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .stage h3 { font-size: 0.97rem; }
+
+  .stage p {
+    font-size: 0.87rem;
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .stage .unit {
+    margin-top: auto;
+    padding-top: 10px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    border-top: 1px dashed var(--rule-strong);
+  }
+
+  /* ---- reasons: deliberately unequal, not three identical cards ---- */
+  .reasons {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 40px;
+  }
+
+  .reason-lead {
+    border-left: 3px solid var(--signal);
+    padding-left: 22px;
+  }
+
+  .reason-lead h3 {
+    font-size: 1.45rem;
+    margin-bottom: 12px;
+  }
+
+  .reason-lead p { color: var(--ink-soft); }
+
+  .reason-list {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .reason-list h3 { margin-bottom: 6px; }
+
+  .reason-list p {
+    font-size: 0.94rem;
+    color: var(--muted);
+  }
+
+  /* ---- models table ---- */
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 520px;
+  }
+
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.688rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 16px 11px 0;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+
+  td {
+    padding: 13px 16px 13px 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: baseline;
+  }
+
+  td.name {
+    font-family: "Archivo", sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  td.num {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  td.note { color: var(--muted); }
+
+  .pick {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    background: var(--accent-wash);
+    color: var(--accent);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.625rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    vertical-align: 2px;
+  }
+
+  /* ---- first run: a numbered sequence, because it genuinely is one ---- */
+  .runthrough {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--rule);
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 24px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .step-n {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+    padding-top: 3px;
+  }
+
+  .step h3 { margin-bottom: 7px; }
+
+  .step p { color: var(--ink-soft); font-size: 0.95rem; }
+
+  .step.heads-up { background: var(--panel-sunk); padding: 22px 18px; }
+  .step.heads-up .step-n { color: var(--accent); }
+
+  kbd {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.82em;
+    background: var(--panel-sunk);
+    border: 1px solid var(--rule-strong);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ---- requirements ---- */
+  .reqs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+    gap: 28px 44px;
+  }
+
+  .req dt {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.688rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 9px;
+  }
+
+  .req dd {
+    margin: 0;
+    font-size: 0.94rem;
+    color: var(--ink-soft);
+  }
+
+  /* ---- footer ---- */
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 36px 0 56px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 32px;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  @media (max-width: 800px) {
+    .hero { grid-template-columns: 1fr; gap: 38px; padding: 44px 0; }
+    .reasons { grid-template-columns: 1fr; gap: 30px; }
+    .step { grid-template-columns: 40px minmax(0, 1fr); gap: 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="brand">
+      <span class="glyph" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fffaf5" stroke-width="2.1" stroke-linecap="round">
+          <rect x="9" y="2" width="6" height="11" rx="3" fill="#fffaf5" stroke="none"></rect>
+          <path d="M5 11a7 7 0 0 0 14 0"></path>
+          <path d="M12 18v3"></path>
+          <path d="M8.5 21h7"></path>
+        </svg>
+      </span>
+      Parrot
+    </div>
+    <span class="label">Speech to text &middot; Windows</span>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Talk to any text field.</h1>
+      <p class="thesis">
+        Hold a key, say what you mean, let go. The words appear wherever your
+        cursor is &mdash; in your editor, your browser, your chat window.
+        <em>Nothing leaves your machine.</em>
+      </p>
+      <span class="offline-stamp"><span class="dot"></span> No account &middot; No network &middot; No telemetry</span>
+    </div>
+
+    <div class="getit">
+      <span class="label">Download</span>
+      <!-- ==========================================================
+           CHANGE THIS href when your installer is hosted somewhere.
+           GitHub Releases is easiest: create a release, drag in
+           Parrot_0.1.0_x64-setup.exe, paste the resulting URL here.
+           ========================================================== -->
+      <a class="cta" id="download" href="https://github.com/YOUR-USERNAME/parrot/releases/latest">
+        Get Parrot for Windows
+      </a>
+      <dl class="specs">
+        <dt>Version</dt><dd>0.1.0</dd>
+        <dt>Installer</dt><dd>2.2 MB</dd>
+        <dt>Platform</dt><dd>Windows 10 / 11, 64-bit</dd>
+        <dt>Speech model</dt><dd>142 MB, downloaded in&nbsp;app</dd>
+        <dt>Licence</dt><dd>MIT, source available</dd>
+      </dl>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Signal path</span>
+      <h2>What happens between the key and the text</h2>
+      <p>
+        Five stages, all of them on your own CPU. The longest one is the model,
+        and it is already resident in memory before you ever press the key.
+      </p>
+    </div>
+
+    <div class="path">
+      <div class="stage">
+        <span class="stage-n">01</span>
+        <h3>Key down</h3>
+        <p>A global shortcut fires whether or not Parrot has focus.</p>
+        <span class="unit">Ctrl + Alt + Space</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">02</span>
+        <h3>Capture</h3>
+        <p>Your chosen microphone streams into a buffer, mixed down to mono as it arrives.</p>
+        <span class="unit">44.1 / 48 kHz in</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">03</span>
+        <h3>Resample</h3>
+        <p>Window-averaged down to the only rate the model accepts.</p>
+        <span class="unit">16 kHz mono f32</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">04</span>
+        <h3>Transcribe</h3>
+        <p>Whisper runs locally through whisper.cpp, across your CPU cores.</p>
+        <span class="unit">ggml &middot; greedy decode</span>
+      </div>
+      <div class="stage">
+        <span class="stage-n">05</span>
+        <h3>Paste</h3>
+        <p>Text goes to the clipboard, one synthetic paste fires, your clipboard is put back.</p>
+        <span class="unit">restores prior contents</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Why local</span>
+      <h2>The recording never becomes someone else&rsquo;s data</h2>
+    </div>
+
+    <div class="reasons">
+      <div class="reason-lead">
+        <h3>Dictation is the most sensitive thing you type</h3>
+        <p>
+          Passwords go in a manager, but everything else &mdash; the medical
+          note, the salary figure, the message you rewrote four times &mdash;
+          goes through your keyboard. A cloud dictation service turns all of it
+          into a request body on someone else&rsquo;s server. Parrot never opens
+          a socket: pull your network cable and it works exactly the same.
+        </p>
+      </div>
+
+      <div class="reason-list">
+        <div>
+          <h3>It keeps working on a plane</h3>
+          <p>No connection, no sign-in, no service to be down or discontinued.</p>
+        </div>
+        <div>
+          <h3>Nothing accumulates</h3>
+          <p>Audio lives in memory for the length of one utterance and is discarded. No history is uploaded, no account exists to leak.</p>
+        </div>
+        <div>
+          <h3>You can read the whole thing</h3>
+          <p>Around 700 lines of Rust, MIT licensed. Small enough to audit in an afternoon rather than trust on faith.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Models</span>
+      <h2>Pick your trade between speed and accuracy</h2>
+      <p>
+        Downloaded from inside the app on first run, then kept on disk. Switch
+        at any time; the English-only models are more accurate than the
+        multilingual one at the same size.
+      </p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Model</th>
+            <th scope="col">Download</th>
+            <th scope="col">Languages</th>
+            <th scope="col">Trade-off</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="name">Tiny</td>
+            <td class="num">75 MB</td>
+            <td class="note">English</td>
+            <td class="note">Fastest, and it shows on unusual words</td>
+          </tr>
+          <tr>
+            <td class="name">Base<span class="pick">Default</span></td>
+            <td class="num">142 MB</td>
+            <td class="note">English</td>
+            <td class="note">The balance most people want</td>
+          </tr>
+          <tr>
+            <td class="name">Small</td>
+            <td class="num">466 MB</td>
+            <td class="note">English</td>
+            <td class="note">Noticeably better, roughly 3&times; slower</td>
+          </tr>
+          <tr>
+            <td class="name">Small</td>
+            <td class="num">466 MB</td>
+            <td class="note">99 languages</td>
+            <td class="note">Needed for anything other than English</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">First run</span>
+      <h2>Two minutes, most of it a download</h2>
+    </div>
+
+    <div class="runthrough">
+      <div class="step heads-up">
+        <span class="step-n">00</span>
+        <div>
+          <h3>Windows will warn you, and it is right to</h3>
+          <p>
+            Parrot is not code-signed &mdash; a certificate costs a few hundred
+            dollars a year. SmartScreen shows &ldquo;Windows protected your
+            PC&rdquo;; the button you want is behind <strong>More info &rarr; Run
+            anyway</strong>. If you would rather not take that on trust, build it
+            yourself from source.
+          </p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-n">01</span>
+        <div>
+          <h3>Install</h3>
+          <p>A few seconds, no administrator rights, and Parrot appears in your Start menu and system tray.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-n">02</span>
+        <div>
+          <h3>Choose a speech model</h3>
+          <p>The first launch has no model yet. Pick one from the list and it downloads with a progress bar &mdash; 142 MB for the default.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-n">03</span>
+        <div>
+          <h3>Check your microphone</h3>
+          <p>Parrot follows your Windows default, but some machines ship with a default input that records pure silence. If nothing is transcribed, pick a different device under Diagnostics &mdash; the status line reports the measured level in dBFS so you can tell silence from quiet.</p>
+        </div>
+      </div>
+      <div class="step">
+        <span class="step-n">04</span>
+        <div>
+          <h3>Hold, speak, release</h3>
+          <p>Press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Space</kbd> anywhere, say your piece, and let go. Rebind it to whatever you like in settings.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="label">Requirements</span>
+      <h2>What it needs from your machine</h2>
+    </div>
+
+    <div class="reqs">
+      <div class="req">
+        <dt>Operating system</dt>
+        <dd>Windows 10 or 11, 64-bit. macOS and Linux builds are not available yet.</dd>
+      </div>
+      <div class="req">
+        <dt>Processor</dt>
+        <dd>Any modern x86-64 CPU. No graphics card is used &mdash; transcription is CPU-only.</dd>
+      </div>
+      <div class="req">
+        <dt>Disk</dt>
+        <dd>About 20 MB installed, plus 75&ndash;466 MB for whichever speech model you choose.</dd>
+      </div>
+      <div class="req">
+        <dt>WebView2</dt>
+        <dd>Used for the settings window. Already present on Windows 11 and current Windows 10; the installer adds it if missing.</dd>
+      </div>
+      <div class="req">
+        <dt>Microphone</dt>
+        <dd>Any input device Windows can see. Bluetooth headsets work but sound worse, as they do everywhere.</dd>
+      </div>
+      <div class="req">
+        <dt>Network</dt>
+        <dd>Only to download the app and its model. Never used afterwards.</dd>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Parrot 0.1.0 &middot; MIT licensed &middot; Built with Tauri, Rust and whisper.cpp</span>
+    <span class="mono">16 kHz &middot; mono &middot; f32</span>
+  </footer>
+</div>
