@@ -1,4 +1,5 @@
 mod audio;
+mod download;
 mod paste;
 mod resample;
 mod settings;
@@ -31,6 +32,8 @@ pub struct AppState {
     transcriber: Arc<Mutex<Option<Transcriber>>>,
     /// True between hotkey press and release. Also debounces key auto-repeat.
     recording: AtomicBool,
+    /// Guards against two downloads racing for the same file.
+    downloading: AtomicBool,
     started_at: Mutex<Option<Instant>>,
     settings: Mutex<Settings>,
     data_dir: PathBuf,
@@ -64,7 +67,9 @@ fn begin_recording(app: &AppHandle) {
         return;
     }
 
-    match state.recorder.start() {
+    let preferred = state.settings.lock().input_device.clone();
+
+    match state.recorder.start(preferred) {
         Ok(()) => {
             *state.started_at.lock() = Some(Instant::now());
             emit_status(app, "recording", "Listening...");
@@ -108,8 +113,17 @@ fn end_recording(app: &AppHandle) {
             return;
         }
 
-        if resample::peak(&capture.samples) < SILENCE_THRESHOLD {
-            emit_status(&app, "idle", "No speech detected");
+        let peak = resample::peak(&capture.samples);
+        if peak < SILENCE_THRESHOLD {
+            // A bare "no speech detected" sent us hunting through the wrong
+            // layers for an hour. The level tells you instantly whether the
+            // microphone is dead (silence) or just quiet.
+            let dbfs = if peak > 0.0 { 20.0 * peak.log10() } else { -120.0 };
+            emit_status(
+                &app,
+                "idle",
+                format!("No speech detected - peak {dbfs:.0} dBFS. Wrong input device?"),
+            );
             return;
         }
 
@@ -173,7 +187,26 @@ fn get_settings(state: State<'_, Arc<AppState>>) -> Settings {
 
 #[tauri::command]
 fn get_device_name(state: State<'_, Arc<AppState>>) -> String {
-    state.recorder.device_name()
+    let preferred = state.settings.lock().input_device.clone();
+    state.recorder.device_name(preferred)
+}
+
+#[tauri::command]
+fn list_input_devices(state: State<'_, Arc<AppState>>) -> Vec<String> {
+    state.recorder.list_devices()
+}
+
+/// An empty string means "follow the OS default".
+#[tauri::command]
+fn set_input_device(state: State<'_, Arc<AppState>>, device: String) -> Result<String, String> {
+    let chosen = if device.is_empty() { None } else { Some(device) };
+
+    let mut settings = state.settings.lock();
+    settings.input_device = chosen.clone();
+    settings.save(&state.data_dir).map_err(|e| e.to_string())?;
+    drop(settings);
+
+    Ok(state.recorder.device_name(chosen))
 }
 
 #[tauri::command]
@@ -246,6 +279,117 @@ fn toggle_recording(app: AppHandle, state: State<'_, Arc<AppState>>) {
     }
 }
 
+#[derive(Serialize)]
+struct ModelEntry {
+    id: String,
+    file: String,
+    label: String,
+    note: String,
+    size_mb: u32,
+    installed: bool,
+    active: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct DownloadProgress {
+    file: String,
+    received: u64,
+    total: u64,
+    percent: u8,
+}
+
+#[tauri::command]
+fn list_models(state: State<'_, Arc<AppState>>) -> Vec<ModelEntry> {
+    let active = state.settings.lock().model_file.clone();
+
+    download::CATALOG
+        .iter()
+        .map(|spec| ModelEntry {
+            id: spec.id.to_string(),
+            file: spec.file.to_string(),
+            label: spec.label.to_string(),
+            note: spec.note.to_string(),
+            size_mb: spec.size_mb,
+            installed: transcribe::model_path(&state.data_dir, spec.file).exists(),
+            active: spec.file == active,
+        })
+        .collect()
+}
+
+/// Switch to an already-downloaded model. Loading happens in the background
+/// because it takes long enough to freeze the window otherwise.
+#[tauri::command]
+fn select_model(app: AppHandle, state: State<'_, Arc<AppState>>, file: String) -> Result<(), String> {
+    if download::spec_for(&file).is_none() {
+        return Err(format!("unknown model: {file}"));
+    }
+
+    let mut settings = state.settings.lock();
+    settings.model_file = file;
+    settings.save(&state.data_dir).map_err(|e| e.to_string())?;
+    drop(settings);
+
+    // Drop the old model first so both are never resident at once.
+    *state.transcriber.lock() = None;
+    load_model_in_background(app);
+    Ok(())
+}
+
+#[tauri::command]
+fn download_model(app: AppHandle, state: State<'_, Arc<AppState>>, file: String) -> Result<(), String> {
+    let spec = download::spec_for(&file).ok_or_else(|| format!("unknown model: {file}"))?;
+
+    if state.downloading.swap(true, Ordering::SeqCst) {
+        return Err("a download is already running".to_string());
+    }
+
+    let dest = transcribe::model_path(&state.data_dir, spec.file);
+    let state = state.inner().clone();
+
+    std::thread::spawn(move || {
+        emit_status(&app, "loading", format!("Downloading {file}..."));
+
+        // Emitting on every 64 KiB chunk would be thousands of events for no
+        // visible benefit; one per percent is plenty for a progress bar.
+        let mut last_percent = u8::MAX;
+        let result = download::fetch(&file, &dest, |received, total| {
+            let percent = if total > 0 {
+                ((received * 100) / total) as u8
+            } else {
+                0
+            };
+            if percent != last_percent {
+                last_percent = percent;
+                let _ = app.emit(
+                    "download-progress",
+                    DownloadProgress {
+                        file: file.clone(),
+                        received,
+                        total,
+                        percent,
+                    },
+                );
+            }
+        });
+
+        state.downloading.store(false, Ordering::SeqCst);
+
+        match result {
+            Ok(()) => {
+                let active = state.settings.lock().model_file.clone();
+                if active == file {
+                    load_model_in_background(app);
+                } else {
+                    emit_status(&app, "idle", format!("{file} downloaded"));
+                }
+            }
+            Err(e) => emit_status(&app, "error", format!("Download failed: {e}")),
+        }
+    });
+
+    Ok(())
+}
+
 // --------------------------------------------------------------- app set-up
 
 fn load_model_in_background(app: AppHandle) {
@@ -261,6 +405,13 @@ fn load_model_in_background(app: AppHandle) {
                 *state.transcriber.lock() = Some(t);
                 let shortcut = state.settings.lock().shortcut.clone();
                 emit_status(&app, "idle", format!("Ready - hold {shortcut} to dictate"));
+            }
+            Err(_) if !path.exists() => {
+                emit_status(
+                    &app,
+                    "no-model",
+                    format!("No speech model yet - download {model_file} to start"),
+                );
             }
             Err(e) => emit_status(&app, "error", format!("{e}")),
         }
@@ -307,6 +458,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings,
             get_device_name,
+            list_input_devices,
+            set_input_device,
+            list_models,
+            select_model,
+            download_model,
             model_ready,
             model_location,
             set_shortcut,
@@ -325,6 +481,7 @@ pub fn run() {
                 recorder: Recorder::new(),
                 transcriber: Arc::new(Mutex::new(None)),
                 recording: AtomicBool::new(false),
+                downloading: AtomicBool::new(false),
                 started_at: Mutex::new(None),
                 settings: Mutex::new(settings),
                 data_dir,

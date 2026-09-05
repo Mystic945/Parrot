@@ -230,3 +230,92 @@ dd {
 .check input {
   flex: none;
 }
+
+.field {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.field span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.field select {
+  width: 100%;
+}
+
+.models {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.model {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  margin-bottom: 6px;
+}
+
+.model.active {
+  border-color: var(--accent);
+}
+
+.model-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-note {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.progress {
+  margin-top: 10px;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.progress-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.pill-no-model {
+  color: #fff;
+  background: var(--accent);
+  border-color: transparent;
+}

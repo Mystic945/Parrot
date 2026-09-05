@@ -25,10 +25,18 @@ hound = "3"
 whisper-rs = "0.16"
 enigo = "0.6"
 arboard = "3"
+# Blocking HTTP with rustls: no OpenSSL, no async runtime to clash with Tauri's.
+ureq = "3"
 
 [profile.dev]
 # whisper.cpp is unusably slow when its dependencies are unoptimized.
 opt-level = 1
+# Incremental compilation plus any optimization trips a rustc/LLVM bug on
+# Windows MSVC: anonymous symbols get internalized in one codegen unit and are
+# then unresolvable from another, so the link dies with a wall of
+# "unresolved external symbol anon.<hash>.llvm.<n>". Release was never affected
+# because it does not use incremental. Costs a few seconds per rebuild.
+incremental = false
 
 [profile.dev.package."*"]
 opt-level = 3

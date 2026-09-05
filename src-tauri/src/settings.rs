@@ -11,6 +11,9 @@ pub struct Settings {
     pub shortcut: String,
     /// ISO language code, or "auto" for whisper's own detection.
     pub language: String,
+    /// Input device name. `None` follows the OS default, which is only a good
+    /// idea when the OS default is actually a working microphone.
+    pub input_device: Option<String>,
     /// Filename inside the models directory.
     pub model_file: String,
     /// Write the resampled audio of each utterance to disk for debugging.
@@ -22,6 +25,7 @@ impl Default for Settings {
         Self {
             shortcut: "Ctrl+Alt+Space".to_string(),
             language: "en".to_string(),
+            input_device: None,
             model_file: "ggml-base.en.bin".to_string(),
             save_debug_wav: false,
         }

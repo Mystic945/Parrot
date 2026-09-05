@@ -19,9 +19,12 @@ pub struct Capture {
 }
 
 enum Cmd {
-    Start(Sender<Result<()>>),
+    /// The `Option` is the device name the user picked; `None` means "whatever
+    /// Windows calls default", which is exactly the assumption that broke here.
+    Start(Option<String>, Sender<Result<()>>),
     Stop(Sender<Capture>),
-    DeviceName(Sender<String>),
+    List(Sender<Vec<String>>),
+    Resolve(Option<String>, Sender<String>),
 }
 
 pub struct Recorder {
@@ -40,13 +43,13 @@ impl Recorder {
 
             while let Ok(cmd) = rx.recv() {
                 match cmd {
-                    Cmd::Start(reply) => {
+                    Cmd::Start(preferred, reply) => {
                         // Starting twice would leak the first stream.
                         if active.is_some() {
                             let _ = reply.send(Ok(()));
                             continue;
                         }
-                        match open_stream() {
+                        match open_stream(preferred.as_deref()) {
                             Ok(stream) => {
                                 active = Some(stream);
                                 let _ = reply.send(Ok(()));
@@ -76,12 +79,12 @@ impl Recorder {
                         let _ = reply.send(capture);
                     }
 
-                    Cmd::DeviceName(reply) => {
-                        let name = cpal::default_host()
-                            .default_input_device()
-                            .and_then(|d| d.name().ok())
-                            .unwrap_or_else(|| "no input device".to_string());
-                        let _ = reply.send(name);
+                    Cmd::List(reply) => {
+                        let _ = reply.send(input_device_names());
+                    }
+
+                    Cmd::Resolve(preferred, reply) => {
+                        let _ = reply.send(resolve_device_name(preferred.as_deref()));
                     }
                 }
             }
@@ -99,9 +102,9 @@ impl Recorder {
             .map_err(|_| anyhow!("audio thread is not running"))
     }
 
-    pub fn start(&self) -> Result<()> {
+    pub fn start(&self, preferred: Option<String>) -> Result<()> {
         let (tx, rx) = channel();
-        self.dispatch(Cmd::Start(tx))?;
+        self.dispatch(Cmd::Start(preferred, tx))?;
         rx.recv()?
     }
 
@@ -111,9 +114,20 @@ impl Recorder {
         Ok(rx.recv()?)
     }
 
-    pub fn device_name(&self) -> String {
+    /// Every input device the host can see, for the settings dropdown.
+    pub fn list_devices(&self) -> Vec<String> {
         let (tx, rx) = channel();
-        if self.dispatch(Cmd::DeviceName(tx)).is_err() {
+        if self.dispatch(Cmd::List(tx)).is_err() {
+            return Vec::new();
+        }
+        rx.recv().unwrap_or_default()
+    }
+
+    /// The device that would actually be used right now - which is not the same
+    /// as the one that was requested, if the request names something unplugged.
+    pub fn device_name(&self, preferred: Option<String>) -> String {
+        let (tx, rx) = channel();
+        if self.dispatch(Cmd::Resolve(preferred, tx)).is_err() {
             return "audio thread stopped".to_string();
         }
         rx.recv().unwrap_or_else(|_| "unknown".to_string())
@@ -126,11 +140,38 @@ impl Default for Recorder {
     }
 }
 
-fn open_stream() -> Result<(cpal::Stream, Arc<Mutex<Vec<f32>>>, u32)> {
+fn input_device_names() -> Vec<String> {
+    cpal::default_host()
+        .input_devices()
+        .map(|devices| devices.filter_map(|d| d.name().ok()).collect())
+        .unwrap_or_default()
+}
+
+fn resolve_device_name(preferred: Option<&str>) -> String {
+    match pick_device(preferred).and_then(|d| d.name().map_err(Into::into)) {
+        Ok(name) => name,
+        Err(e) => format!("unavailable ({e})"),
+    }
+}
+
+/// A named device that has since been unplugged must not silently fall back to
+/// the default - that is how you end up recording silence and not knowing why.
+fn pick_device(preferred: Option<&str>) -> Result<cpal::Device> {
     let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| anyhow!("no default input device — is a microphone connected?"))?;
+
+    match preferred {
+        Some(wanted) => host
+            .input_devices()?
+            .find(|d| d.name().map(|n| n == wanted).unwrap_or(false))
+            .ok_or_else(|| anyhow!("input device not found: {wanted}")),
+        None => host
+            .default_input_device()
+            .ok_or_else(|| anyhow!("no default input device - is a microphone connected?")),
+    }
+}
+
+fn open_stream(preferred: Option<&str>) -> Result<(cpal::Stream, Arc<Mutex<Vec<f32>>>, u32)> {
+    let device = pick_device(preferred)?;
 
     let supported = device.default_input_config()?;
     let sample_rate = supported.sample_rate().0;
