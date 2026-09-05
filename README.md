@@ -3,6 +3,8 @@
 Offline push-to-talk dictation. Hold a hotkey, speak, release — the text is
 pasted into whatever window has focus. Nothing leaves the machine.
 
+Get parrot here:- https://parrot-dictation.netlify.app/
+
 A deliberately small reimplementation of the core of
 [Handy](https://github.com/cjpais/Handy), built to be read in one sitting.
 
